@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-#include <deque>
+#include <vector>
 #include <initializer_list>
 #include <thread>
 #include <condition_variable>
@@ -21,23 +21,22 @@ public:
 
     virtual void push(const T &data) = 0;
     virtual void push(T &&data) = 0;
-    virtual void push(const std::initializer_list<T> &data) = 0;
+    virtual void push(const std::vector<T> &data) = 0;
 };
 
 template<typename T>
 class TaskQueue: public TaskQueueAbstract<T>
 {
 public:
-    TaskQueue(): run{true}, thread{std::make_unique<std::thread>(&TaskQueue::loop, this)}
-    {
-        process = [](const T &data){
-            std::cout << data << std::endl;
-        };
-    }
+    TaskQueue(std::function<void(const T &)> process): run{true}, process{process},
+        thread{std::make_unique<std::thread>(&TaskQueue::loop, this)} {}
     ~TaskQueue() override
     {
         run = false;
-        condition.notify_all();
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            condition.notify_all();
+        }
         thread->join();
     }
 
@@ -53,7 +52,7 @@ public:
         queue.push_back(std::move(data));
         condition.notify_all();
     }
-    void push(const std::initializer_list<T> &data) override
+    void push(const std::vector<T> &data) override
     {
         std::lock_guard<std::mutex> lock(mutex);
         std::copy(data.begin(), data.end(), std::back_inserter(queue));
@@ -63,8 +62,8 @@ public:
 private:
     void loop()
     {
-        while (wait() && run) {
-            std::deque<T> queue_process;
+        while (run && wait()) {
+            std::vector<T> queue_process;
             while (load(queue_process)) {
                 for (const T &data : queue_process) {
                     process(data);
@@ -82,7 +81,7 @@ private:
         return queue.size();
     }
 
-    bool load(std::deque<T> &process)
+    bool load(std::vector<T> &process)
     {
         process.clear();
 
@@ -96,7 +95,7 @@ private:
     }
 
 private:
-    std::deque<T> queue;
+    std::vector<T> queue;
     std::atomic_bool run;
     std::unique_ptr<std::thread> thread;
     std::mutex mutex;
