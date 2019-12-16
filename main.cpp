@@ -22,7 +22,7 @@ int main()
 
 void test1()
 {
-    TaskQueue<std::string> queue([](const std::string &data){
+    DataProcessQueue<std::string> queue([](const std::string &data){
         std::cout << data << std::endl;
     });
 
@@ -42,7 +42,7 @@ void test2()
     }
 
     {
-        TaskQueue<unsigned> queue([&](const unsigned &number){
+        DataProcessQueue<unsigned> queue([&](const unsigned &number){
             data.erase(number);
         });
 
